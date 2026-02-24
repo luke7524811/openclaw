@@ -344,13 +344,11 @@ function loadAuthProfileStoreForAgent(
   const raw = loadJsonFile(authPath);
   const asStore = coerceAuthStore(raw);
   if (asStore) {
-    // Runtime secret activation must remain read-only.
-    if (!readOnly) {
-      // Sync from external CLI tools on every load
-      const synced = syncExternalCliCredentials(asStore);
-      if (synced) {
-        saveJsonFile(authPath, asStore);
-      }
+    // Runtime secret activation must remain read-only:
+    // sync external CLI credentials in-memory, but never persist while readOnly.
+    const synced = syncExternalCliCredentials(asStore);
+    if (synced && !readOnly) {
+      saveJsonFile(authPath, asStore);
     }
     return asStore;
   }
@@ -379,7 +377,8 @@ function loadAuthProfileStoreForAgent(
   }
 
   const mergedOAuth = mergeOAuthFileIntoStore(store);
-  const syncedCli = readOnly ? false : syncExternalCliCredentials(store);
+  // Keep external CLI credentials visible in runtime even during read-only loads.
+  const syncedCli = syncExternalCliCredentials(store);
   const shouldWrite = !readOnly && (legacy !== null || mergedOAuth || syncedCli);
   if (shouldWrite) {
     saveJsonFile(authPath, store);
