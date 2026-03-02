@@ -30,6 +30,7 @@ import {
 import {
   countActiveDescendantRunsFromRuns,
   countActiveRunsForSessionFromRuns,
+  countPendingDescendantRunsExcludingRunFromRuns,
   countPendingDescendantRunsFromRuns,
   findRunIdsByChildSessionKeyFromRuns,
   listDescendantRunsForRequesterFromRuns,
@@ -1161,6 +1162,17 @@ export function countPendingDescendantRuns(rootSessionKey: string): number {
   return countPendingDescendantRunsFromRuns(
     getSubagentRunsSnapshotForRead(subagentRuns),
     rootSessionKey,
+  );
+}
+
+export function countPendingDescendantRunsExcludingRun(
+  rootSessionKey: string,
+  excludeRunId: string,
+): number {
+  return countPendingDescendantRunsExcludingRunFromRuns(
+    getSubagentRunsSnapshotForRead(subagentRuns),
+    rootSessionKey,
+    excludeRunId,
   );
 }
 
