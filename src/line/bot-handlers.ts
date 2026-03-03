@@ -427,6 +427,7 @@ export async function handleLineWebhookEvents(
   events: WebhookEvent[],
   context: LineHandlerContext,
 ): Promise<void> {
+  let firstError: unknown;
   for (const event of events) {
     const replayCandidate = getLineReplayCandidate(event, context);
     if (replayCandidate && shouldSkipLineReplayEvent(replayCandidate)) {
@@ -460,6 +461,10 @@ export async function handleLineWebhookEvents(
       }
     } catch (err) {
       context.runtime.error?.(danger(`line: event handler failed: ${String(err)}`));
+      firstError ??= err;
     }
+  }
+  if (firstError) {
+    throw firstError;
   }
 }

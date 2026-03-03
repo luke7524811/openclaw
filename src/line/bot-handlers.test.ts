@@ -541,10 +541,13 @@ describe("handleLineWebhookEvents", () => {
       replayCache: createLineWebhookReplayCache(),
     };
 
-    await handleLineWebhookEvents([event], context);
+    await expect(handleLineWebhookEvents([event], context)).rejects.toThrow("transient failure");
     await handleLineWebhookEvents([event], context);
 
     expect(buildLineMessageContextMock).toHaveBeenCalledTimes(2);
     expect(processMessage).toHaveBeenCalledTimes(2);
+    expect(context.runtime.error).toHaveBeenCalledWith(
+      expect.stringContaining("line: event handler failed: Error: transient failure"),
+    );
   });
 });
