@@ -110,4 +110,23 @@ describe("buildLineMessageContext", () => {
     expect(context?.ctxPayload.OriginatingTo).toBe("line:room:room-1");
     expect(context?.ctxPayload.To).toBe("line:room:room-1");
   });
+
+  it("keeps non-text message contexts fail-closed for command auth", async () => {
+    const event = createMessageEvent(
+      { type: "user", userId: "user-audio" },
+      {
+        message: { id: "audio-1", type: "audio", duration: 1000 } as MessageEvent["message"],
+      },
+    );
+
+    const context = await buildLineMessageContext({
+      event,
+      allMedia: [],
+      cfg,
+      account,
+    });
+
+    expect(context).not.toBeNull();
+    expect(context?.ctxPayload.CommandAuthorized).toBe(false);
+  });
 });
