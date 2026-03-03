@@ -408,7 +408,9 @@ export async function handleLineWebhookEvents(
       }
     } catch (err) {
       context.runtime.error?.(danger(`line: event handler failed: ${String(err)}`));
-      throw err;
+      // Continue processing remaining events in this batch. Webhook ACK is sent
+      // before processing, so dropping later events here would make them unrecoverable.
+      continue;
     }
   }
 }

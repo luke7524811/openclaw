@@ -300,7 +300,7 @@ describe("handleLineWebhookEvents", () => {
     expect(processMessage).toHaveBeenCalledTimes(1);
   });
 
-  it("throws when an event handler fails and stops processing later events", async () => {
+  it("continues processing later events when one event handler fails", async () => {
     const failingEvent = {
       type: "message",
       message: { id: "m-err", type: "text", text: "hi" },
@@ -317,27 +317,27 @@ describe("handleLineWebhookEvents", () => {
       webhookEventId: "evt-later",
     } as MessageEvent;
     const runtime = createRuntime();
-    const processMessage = vi.fn(async () => {
-      throw new Error("boom");
+    const processMessage = vi
+      .fn<Parameters<LineProcessMessageFn>, ReturnType<LineProcessMessageFn>>()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(undefined);
+
+    await handleLineWebhookEvents([failingEvent, laterEvent], {
+      cfg: { channels: { line: {} } },
+      account: {
+        accountId: "default",
+        enabled: true,
+        channelAccessToken: "token",
+        channelSecret: "secret",
+        tokenSource: "config",
+        config: { dmPolicy: "open" },
+      },
+      runtime,
+      mediaMaxBytes: 1234,
+      processMessage,
     });
 
-    await expect(
-      handleLineWebhookEvents([failingEvent, laterEvent], {
-        cfg: { channels: { line: {} } },
-        account: {
-          accountId: "default",
-          enabled: true,
-          channelAccessToken: "token",
-          channelSecret: "secret",
-          tokenSource: "config",
-          config: { dmPolicy: "open" },
-        },
-        runtime,
-        mediaMaxBytes: 1234,
-        processMessage,
-      }),
-    ).rejects.toThrow("boom");
-    expect(processMessage).toHaveBeenCalledTimes(1);
+    expect(processMessage).toHaveBeenCalledTimes(2);
     expect(runtime.error).toHaveBeenCalledTimes(1);
   });
 });
