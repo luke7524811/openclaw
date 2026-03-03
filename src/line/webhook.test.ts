@@ -125,7 +125,7 @@ describe("createLineWebhookMiddleware", () => {
     const onEvents = vi.fn(async () => {
       throw new Error("boom");
     });
-    const runtime = { error: vi.fn() };
+    const runtime = { log: vi.fn(), error: vi.fn(), exit: vi.fn() };
     const rawBody = JSON.stringify({ events: [{ type: "message" }] });
     const middleware = createLineWebhookMiddleware({
       channelSecret: SECRET,
