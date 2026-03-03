@@ -100,16 +100,6 @@ function buildLineWebhookReplayKey(
       };
     }
   }
-  if (event.type === "postback") {
-    const replyToken = event.replyToken?.trim();
-    if (replyToken) {
-      return {
-        key: `${accountId}|postback:${replyToken}`,
-        eventId: `postback:${replyToken}`,
-      };
-    }
-  }
-
   const eventId = (event as { webhookEventId?: string }).webhookEventId?.trim();
   if (!eventId) {
     return null;
@@ -129,11 +119,21 @@ function buildLineWebhookReplayKey(
   return { key: `${accountId}|${event.type}|${sourceId}|${eventId}`, eventId: `event:${eventId}` };
 }
 
-function shouldSkipLineReplayEvent(event: WebhookEvent, context: LineHandlerContext): boolean {
+type LineReplayCandidate = {
+  key: string;
+  eventId: string;
+  seenAtMs: number;
+  cache: LineWebhookReplayCache;
+};
+
+function getLineReplayCandidate(
+  event: WebhookEvent,
+  context: LineHandlerContext,
+): LineReplayCandidate | null {
   const replay = buildLineWebhookReplayKey(event, context.account.accountId);
   const cache = context.replayCache;
   if (!replay || !cache) {
-    return false;
+    return null;
   }
 
   const nowMs = Date.now();
@@ -144,12 +144,19 @@ function shouldSkipLineReplayEvent(event: WebhookEvent, context: LineHandlerCont
     pruneLineWebhookReplayCache(cache, nowMs);
     cache.lastPruneAtMs = nowMs;
   }
-  if (cache.seenEvents.has(replay.key)) {
-    logVerbose(`line: skipped replayed webhook event ${replay.eventId}`);
+  return { key: replay.key, eventId: replay.eventId, seenAtMs: nowMs, cache };
+}
+
+function shouldSkipLineReplayEvent(candidate: LineReplayCandidate): boolean {
+  if (candidate.cache.seenEvents.has(candidate.key)) {
+    logVerbose(`line: skipped replayed webhook event ${candidate.eventId}`);
     return true;
   }
-  cache.seenEvents.set(replay.key, nowMs);
   return false;
+}
+
+function rememberLineReplayEvent(candidate: LineReplayCandidate): void {
+  candidate.cache.seenEvents.set(candidate.key, candidate.seenAtMs);
 }
 
 function resolveLineGroupConfig(params: {
@@ -421,7 +428,8 @@ export async function handleLineWebhookEvents(
   context: LineHandlerContext,
 ): Promise<void> {
   for (const event of events) {
-    if (shouldSkipLineReplayEvent(event, context)) {
+    const replayCandidate = getLineReplayCandidate(event, context);
+    if (replayCandidate && shouldSkipLineReplayEvent(replayCandidate)) {
       continue;
     }
     try {
@@ -446,6 +454,9 @@ export async function handleLineWebhookEvents(
           break;
         default:
           logVerbose(`line: unhandled event type: ${(event as WebhookEvent).type}`);
+      }
+      if (replayCandidate) {
+        rememberLineReplayEvent(replayCandidate);
       }
     } catch (err) {
       context.runtime.error?.(danger(`line: event handler failed: ${String(err)}`));

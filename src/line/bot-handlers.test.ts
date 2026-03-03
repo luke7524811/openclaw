@@ -1,4 +1,4 @@
-import type { MessageEvent } from "@line/bot-sdk";
+import type { MessageEvent, PostbackEvent } from "@line/bot-sdk";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Avoid pulling in globals/pairing/media dependencies; this suite only asserts
@@ -39,7 +39,7 @@ const { buildLineMessageContextMock, buildLinePostbackContextMock } = vi.hoisted
     isGroup: true,
     accountId: "default",
   })),
-  buildLinePostbackContextMock: vi.fn(async () => null),
+  buildLinePostbackContextMock: vi.fn(async () => null as unknown),
 }));
 
 vi.mock("./bot-message-context.js", () => ({
@@ -456,5 +456,95 @@ describe("handleLineWebhookEvents", () => {
 
     expect(buildLineMessageContextMock).toHaveBeenCalledTimes(1);
     expect(processMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates postback redeliveries by webhookEventId when replyToken changes", async () => {
+    const processMessage = vi.fn();
+    buildLinePostbackContextMock.mockResolvedValue({
+      ctxPayload: { From: "line:user:user-postback" },
+      route: { agentId: "default" },
+      isGroup: false,
+      accountId: "default",
+    });
+    const event = {
+      type: "postback",
+      postback: { data: "action=confirm" },
+      replyToken: "reply-token-1",
+      timestamp: Date.now(),
+      source: { type: "user", userId: "user-postback" },
+      mode: "active",
+      webhookEventId: "evt-postback-1",
+      deliveryContext: { isRedelivery: false },
+    } as PostbackEvent;
+
+    const context: Parameters<typeof handleLineWebhookEvents>[1] = {
+      cfg: { channels: { line: { dmPolicy: "open" } } },
+      account: {
+        accountId: "default",
+        enabled: true,
+        channelAccessToken: "token",
+        channelSecret: "secret",
+        tokenSource: "config",
+        config: { dmPolicy: "open" },
+      },
+      runtime: createRuntime(),
+      mediaMaxBytes: 1,
+      processMessage,
+      replayCache: createLineWebhookReplayCache(),
+    };
+
+    await handleLineWebhookEvents([event], context);
+    await handleLineWebhookEvents(
+      [
+        {
+          ...event,
+          replyToken: "reply-token-2",
+          deliveryContext: { isRedelivery: true },
+        } as PostbackEvent,
+      ],
+      context,
+    );
+
+    expect(buildLinePostbackContextMock).toHaveBeenCalledTimes(1);
+    expect(processMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark replay cache when event processing fails", async () => {
+    const processMessage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("transient failure"))
+      .mockResolvedValueOnce(undefined);
+    const event = {
+      type: "message",
+      message: { id: "m-fail-then-retry", type: "text", text: "hello" },
+      replyToken: "reply-token",
+      timestamp: Date.now(),
+      source: { type: "group", groupId: "group-retry", userId: "user-retry" },
+      mode: "active",
+      webhookEventId: "evt-fail-then-retry",
+      deliveryContext: { isRedelivery: false },
+    } as MessageEvent;
+
+    const context: Parameters<typeof handleLineWebhookEvents>[1] = {
+      cfg: { channels: { line: { groupPolicy: "open" } } },
+      account: {
+        accountId: "default",
+        enabled: true,
+        channelAccessToken: "token",
+        channelSecret: "secret",
+        tokenSource: "config",
+        config: { groupPolicy: "open" },
+      },
+      runtime: createRuntime(),
+      mediaMaxBytes: 1,
+      processMessage,
+      replayCache: createLineWebhookReplayCache(),
+    };
+
+    await handleLineWebhookEvents([event], context);
+    await handleLineWebhookEvents([event], context);
+
+    expect(buildLineMessageContextMock).toHaveBeenCalledTimes(2);
+    expect(processMessage).toHaveBeenCalledTimes(2);
   });
 });
