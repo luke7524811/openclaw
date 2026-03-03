@@ -84,18 +84,7 @@ describe("downloadLineMedia", () => {
 
   it("detects MP4 video from ftyp major brand (isom)", async () => {
     const mp4 = Buffer.from([
-      0x00,
-      0x00,
-      0x00,
-      0x1c,
-      0x66,
-      0x74,
-      0x79,
-      0x70,
-      0x69,
-      0x73,
-      0x6f,
-      0x6d,
+      0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d,
     ]);
     getMessageContentMock.mockResolvedValueOnce(chunks([mp4]));
     vi.spyOn(fs.promises, "writeFile").mockResolvedValueOnce(undefined);
