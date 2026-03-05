@@ -192,17 +192,17 @@ async function resolveGatewayTokenSecretRef(
   cfg: OpenClawConfig,
   env: NodeJS.ProcessEnv,
   authOverride?: GatewayAuthConfig,
-): Promise<OpenClawConfig> {
+): Promise<string | undefined> {
   const authToken = cfg.gateway?.auth?.token;
   const { ref } = resolveSecretInputRef({
     value: authToken,
     defaults: cfg.secrets?.defaults,
   });
   if (!ref) {
-    return cfg;
+    return undefined;
   }
   if (!shouldResolveGatewayTokenSecretRef({ cfg, env, authOverride })) {
-    return cfg;
+    return undefined;
   }
   const resolved = await resolveSecretRefValues([ref], {
     config: cfg,
@@ -212,16 +212,7 @@ async function resolveGatewayTokenSecretRef(
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error("gateway.auth.token resolved to an empty or non-string value.");
   }
-  return {
-    ...cfg,
-    gateway: {
-      ...cfg.gateway,
-      auth: {
-        ...cfg.gateway?.auth,
-        token: value.trim(),
-      },
-    },
-  };
+  return value.trim();
 }
 
 function shouldResolveGatewayPasswordSecretRef(params: {
@@ -250,17 +241,17 @@ async function resolveGatewayPasswordSecretRef(
   cfg: OpenClawConfig,
   env: NodeJS.ProcessEnv,
   authOverride?: GatewayAuthConfig,
-): Promise<OpenClawConfig> {
+): Promise<string | undefined> {
   const authPassword = cfg.gateway?.auth?.password;
   const { ref } = resolveSecretInputRef({
     value: authPassword,
     defaults: cfg.secrets?.defaults,
   });
   if (!ref) {
-    return cfg;
+    return undefined;
   }
   if (!shouldResolveGatewayPasswordSecretRef({ cfg, env, authOverride })) {
-    return cfg;
+    return undefined;
   }
   const resolved = await resolveSecretRefValues([ref], {
     config: cfg,
@@ -270,16 +261,7 @@ async function resolveGatewayPasswordSecretRef(
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error("gateway.auth.password resolved to an empty or non-string value.");
   }
-  return {
-    ...cfg,
-    gateway: {
-      ...cfg.gateway,
-      auth: {
-        ...cfg.gateway?.auth,
-        password: value.trim(),
-      },
-    },
-  };
+  return value.trim();
 }
 
 export async function ensureGatewayStartupAuth(params: {
@@ -297,34 +279,36 @@ export async function ensureGatewayStartupAuth(params: {
   assertExplicitGatewayAuthModeWhenBothConfigured(params.cfg);
   const env = params.env ?? process.env;
   const persistRequested = params.persist === true;
-  const cfgWithResolvedToken = await resolveGatewayTokenSecretRef(
-    params.cfg,
-    env,
-    params.authOverride,
-  );
-  const cfgForAuth = await resolveGatewayPasswordSecretRef(
-    cfgWithResolvedToken,
-    env,
-    params.authOverride,
-  );
+  const [resolvedTokenRefValue, resolvedPasswordRefValue] = await Promise.all([
+    resolveGatewayTokenSecretRef(params.cfg, env, params.authOverride),
+    resolveGatewayPasswordSecretRef(params.cfg, env, params.authOverride),
+  ]);
+  const authOverride: GatewayAuthConfig | undefined =
+    params.authOverride || resolvedTokenRefValue || resolvedPasswordRefValue
+      ? {
+          ...params.authOverride,
+          ...(resolvedTokenRefValue ? { token: resolvedTokenRefValue } : {}),
+          ...(resolvedPasswordRefValue ? { password: resolvedPasswordRefValue } : {}),
+        }
+      : undefined;
   const resolved = resolveGatewayAuthFromConfig({
-    cfg: cfgForAuth,
+    cfg: params.cfg,
     env,
-    authOverride: params.authOverride,
+    authOverride,
     tailscaleOverride: params.tailscaleOverride,
   });
   if (resolved.mode !== "token" || (resolved.token?.trim().length ?? 0) > 0) {
-    assertHooksTokenSeparateFromGatewayAuth({ cfg: cfgForAuth, auth: resolved });
-    return { cfg: cfgForAuth, auth: resolved, persistedGeneratedToken: false };
+    assertHooksTokenSeparateFromGatewayAuth({ cfg: params.cfg, auth: resolved });
+    return { cfg: params.cfg, auth: resolved, persistedGeneratedToken: false };
   }
 
   const generatedToken = crypto.randomBytes(24).toString("hex");
   const nextCfg: OpenClawConfig = {
-    ...cfgForAuth,
+    ...params.cfg,
     gateway: {
-      ...cfgForAuth.gateway,
+      ...params.cfg.gateway,
       auth: {
-        ...cfgForAuth.gateway?.auth,
+        ...params.cfg.gateway?.auth,
         mode: "token",
         token: generatedToken,
       },

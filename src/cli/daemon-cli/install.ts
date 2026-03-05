@@ -109,12 +109,20 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
   let token: string | undefined =
     opts.token?.trim() ||
     (typeof cfg.gateway?.auth?.token === "string" ? cfg.gateway.auth.token.trim() : undefined) ||
-    process.env.OPENCLAW_GATEWAY_TOKEN?.trim() ||
-    process.env.CLAWDBOT_GATEWAY_TOKEN?.trim();
+    (tokenRef
+      ? undefined
+      : process.env.OPENCLAW_GATEWAY_TOKEN?.trim() || process.env.CLAWDBOT_GATEWAY_TOKEN?.trim());
 
-  if (!token && tokenRef) {
+  if (tokenRef && !token) {
     try {
-      token = await resolveConfiguredTokenRef();
+      await resolveConfiguredTokenRef();
+      const warning =
+        "gateway.auth.token is SecretRef-managed; install will not persist a resolved token in service environment. Ensure the SecretRef is resolvable in the daemon runtime context.";
+      if (json) {
+        warnings.push(warning);
+      } else {
+        defaultRuntime.log(warning);
+      }
     } catch (err) {
       if (needsToken) {
         fail(
@@ -133,7 +141,7 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
     }
   }
 
-  if (!token && needsToken) {
+  if (!token && needsToken && !tokenRef) {
     token = randomToken();
     const warnMsg = "No gateway token found. Auto-generated one and saving to config.";
     if (json) {

@@ -130,6 +130,11 @@ describe("ensureGatewayStartupAuth", () => {
     expect(result.generatedToken).toBeUndefined();
     expect(result.auth.mode).toBe("password");
     expect(result.auth.password).toBe("resolved-password");
+    expect(result.cfg.gateway?.auth?.password).toEqual({
+      source: "env",
+      provider: "default",
+      id: "GW_PASSWORD",
+    });
   });
 
   it("resolves gateway.auth.token SecretRef before startup auth checks", async () => {
@@ -157,6 +162,11 @@ describe("ensureGatewayStartupAuth", () => {
     expect(result.persistedGeneratedToken).toBe(false);
     expect(result.auth.mode).toBe("token");
     expect(result.auth.token).toBe("resolved-token");
+    expect(result.cfg.gateway?.auth?.token).toEqual({
+      source: "env",
+      provider: "default",
+      id: "GW_TOKEN",
+    });
     expect(mocks.writeConfigFile).not.toHaveBeenCalled();
   });
 

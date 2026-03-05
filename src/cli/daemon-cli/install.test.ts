@@ -178,6 +178,30 @@ describe("runDaemonInstall", () => {
     expect(installDaemonServiceAndEmitMock).not.toHaveBeenCalled();
   });
 
+  it("validates token SecretRef but does not serialize resolved token into service env", async () => {
+    resolveSecretInputRefMock.mockReturnValue({
+      ref: { source: "env", provider: "default", id: "OPENCLAW_GATEWAY_TOKEN" },
+    });
+    resolveSecretRefValuesMock.mockResolvedValue(
+      new Map([["env:default:OPENCLAW_GATEWAY_TOKEN", "resolved-from-secretref"]]),
+    );
+
+    await runDaemonInstall({ json: true });
+
+    expect(actionState.failed).toEqual([]);
+    expect(buildGatewayInstallPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: undefined,
+      }),
+    );
+    expect(writeConfigFileMock).not.toHaveBeenCalled();
+    expect(
+      actionState.warnings.some((warning) =>
+        warning.includes("gateway.auth.token is SecretRef-managed"),
+      ),
+    ).toBe(true);
+  });
+
   it("auto-mints and persists token when no source exists", async () => {
     randomTokenMock.mockReturnValue("minted-token");
     readConfigFileSnapshotMock.mockResolvedValue({

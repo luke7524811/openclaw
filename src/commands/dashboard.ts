@@ -28,6 +28,7 @@ function readGatewayTokenEnv(env: NodeJS.ProcessEnv): string | undefined {
 
 async function resolveDashboardToken(
   cfg: OpenClawConfig,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ token?: string; unresolvedRefReason?: string }> {
   const configToken =
     typeof cfg.gateway?.auth?.token === "string" ? cfg.gateway.auth.token.trim() : undefined;
@@ -39,23 +40,23 @@ async function resolveDashboardToken(
     defaults: cfg.secrets?.defaults,
   });
   if (!ref) {
-    return { token: readGatewayTokenEnv(process.env) };
+    return { token: readGatewayTokenEnv(env) };
   }
   try {
     const resolved = await resolveSecretRefValues([ref], {
       config: cfg,
-      env: process.env,
+      env,
     });
     const value = resolved.get(secretRefKey(ref));
     if (typeof value === "string" && value.trim().length > 0) {
       return { token: value.trim() };
     }
-    const envToken = readGatewayTokenEnv(process.env);
+    const envToken = readGatewayTokenEnv(env);
     return envToken
       ? { token: envToken }
       : { unresolvedRefReason: "gateway.auth.token SecretRef resolved to an empty value." };
   } catch (err) {
-    const envToken = readGatewayTokenEnv(process.env);
+    const envToken = readGatewayTokenEnv(env);
     return envToken
       ? { token: envToken }
       : { unresolvedRefReason: `gateway.auth.token SecretRef is unresolved (${String(err)}).` };
@@ -72,7 +73,7 @@ export async function dashboardCommand(
   const bind = cfg.gateway?.bind ?? "loopback";
   const basePath = cfg.gateway?.controlUi?.basePath;
   const customBindHost = cfg.gateway?.customBindHost;
-  const resolvedToken = await resolveDashboardToken(cfg);
+  const resolvedToken = await resolveDashboardToken(cfg, process.env);
   const token = resolvedToken.token ?? "";
 
   // LAN URLs fail secure-context checks in browsers.

@@ -1,7 +1,6 @@
 import { formatCliCommand } from "../cli/command-format.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveGatewayPort } from "../config/config.js";
-import { normalizeSecretInputString } from "../config/types.secrets.js";
 import {
   resolveGatewayLaunchAgentLabel,
   resolveNodeLaunchAgentLabel,
@@ -28,6 +27,10 @@ import {
   type GatewayDaemonRuntime,
 } from "./daemon-runtime.js";
 import { buildGatewayRuntimeHints, formatGatewayRuntimeSummary } from "./doctor-format.js";
+import {
+  resolveGatewayAuthTokenForService,
+  shouldRequireGatewayTokenForInstall,
+} from "./doctor-gateway-auth-token.js";
 import type { DoctorOptions, DoctorPrompter } from "./doctor-prompter.js";
 import { formatHealthCheckFailure } from "./health-format.js";
 import { healthCommand } from "./health.js";
@@ -172,13 +175,24 @@ export async function maybeRepairGatewayDaemon(params: {
           },
           DEFAULT_GATEWAY_DAEMON_RUNTIME,
         );
+        const tokenResolution = await resolveGatewayAuthTokenForService(params.cfg, process.env);
+        const tokenRequired = shouldRequireGatewayTokenForInstall(params.cfg, process.env);
+        if (tokenRequired && tokenResolution.unavailableReason) {
+          note(
+            [
+              "Gateway service install aborted: gateway token is required but unavailable.",
+              tokenResolution.unavailableReason,
+              "Set OPENCLAW_GATEWAY_TOKEN in this shell or resolve your secret provider, then rerun doctor.",
+            ].join("\n"),
+            "Gateway",
+          );
+          return;
+        }
         const port = resolveGatewayPort(params.cfg, process.env);
         const { programArguments, workingDirectory, environment } = await buildGatewayInstallPlan({
           env: process.env,
           port,
-          token:
-            normalizeSecretInputString(params.cfg.gateway?.auth?.token) ??
-            process.env.OPENCLAW_GATEWAY_TOKEN,
+          token: tokenResolution.token,
           runtime: daemonRuntime,
           warn: (message, title) => note(message, title),
           config: params.cfg,
