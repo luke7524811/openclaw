@@ -848,7 +848,7 @@ async function executeGatewayRequestWithScopes<T>(params: {
           });
           const result = await client.request<T>(opts.method, opts.params, {
             expectFinal: opts.expectFinal,
-            timeoutMs,
+            timeoutMs: opts.timeoutMs,
           });
           ignoreClose = true;
           stop(undefined, result);

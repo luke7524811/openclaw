@@ -594,6 +594,16 @@ describe("callGateway error details", () => {
     expect(lastRequestOptions?.opts?.timeoutMs).toBe(45_000);
   });
 
+  it("does not inject wrapper timeout defaults into expectFinal requests", async () => {
+    setLocalLoopbackGatewayConfig();
+
+    await callGateway({ method: "health", expectFinal: true });
+
+    expect(lastRequestOptions?.method).toBe("health");
+    expect(lastRequestOptions?.opts?.expectFinal).toBe(true);
+    expect(lastRequestOptions?.opts?.timeoutMs).toBeUndefined();
+  });
+
   it("fails fast when remote mode is missing remote url", async () => {
     loadConfig.mockReturnValue({
       gateway: { mode: "remote", bind: "loopback", remote: {} },
