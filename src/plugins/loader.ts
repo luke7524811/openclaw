@@ -15,12 +15,12 @@ import {
 import {
   buildExtensionHostProvenanceIndex,
   compareExtensionHostDuplicateCandidateOrder,
-  createExtensionHostPluginRecord,
   pushExtensionHostDiagnostics,
   recordExtensionHostPluginError,
   warnAboutUntrackedLoadedExtensions,
   warnWhenExtensionAllowlistIsOpen,
 } from "../extension-host/loader-policy.js";
+import { prepareExtensionHostPluginCandidate } from "../extension-host/loader-records.js";
 import {
   applyExtensionHostDefinitionToRecord,
   resolveExtensionHostEarlyMemoryDecision,
@@ -41,7 +41,6 @@ import { clearPluginCommands } from "./commands.js";
 import {
   applyTestPluginDefaults,
   normalizePluginsConfig,
-  resolveEffectiveEnableState,
   type NormalizedPluginsConfig,
 } from "./config-state.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
@@ -290,45 +289,19 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       continue;
     }
     const pluginId = manifestRecord.id;
-    const existingOrigin = seenIds.get(pluginId);
-    if (existingOrigin) {
-      const record = createExtensionHostPluginRecord({
-        id: pluginId,
-        name: manifestRecord.name ?? pluginId,
-        description: manifestRecord.description,
-        version: manifestRecord.version,
-        source: candidate.source,
-        origin: candidate.origin,
-        workspaceDir: candidate.workspaceDir,
-        enabled: false,
-        configSchema: Boolean(manifestRecord.configSchema),
-      });
-      setExtensionHostPluginRecordDisabled(record, `overridden by ${existingOrigin} plugin`);
+    const preparedCandidate = prepareExtensionHostPluginCandidate({
+      candidate,
+      manifestRecord,
+      normalizedConfig: normalized,
+      rootConfig: cfg,
+      seenIds,
+    });
+    if (preparedCandidate.kind === "duplicate") {
+      const { record } = preparedCandidate;
       appendExtensionHostPluginRecord({ registry, record });
       continue;
     }
-
-    const enableState = resolveEffectiveEnableState({
-      id: pluginId,
-      origin: candidate.origin,
-      config: normalized,
-      rootConfig: cfg,
-    });
-    const entry = normalized.entries[pluginId];
-    const record = createExtensionHostPluginRecord({
-      id: pluginId,
-      name: manifestRecord.name ?? pluginId,
-      description: manifestRecord.description,
-      version: manifestRecord.version,
-      source: candidate.source,
-      origin: candidate.origin,
-      workspaceDir: candidate.workspaceDir,
-      enabled: enableState.enabled,
-      configSchema: Boolean(manifestRecord.configSchema),
-    });
-    record.kind = manifestRecord.kind;
-    record.configUiHints = manifestRecord.configUiHints;
-    record.configJsonSchema = manifestRecord.configSchema;
+    const { record, entry, enableState } = preparedCandidate;
     const pushPluginLoadError = (message: string) => {
       setExtensionHostPluginRecordError(record, message);
       appendExtensionHostPluginRecord({
