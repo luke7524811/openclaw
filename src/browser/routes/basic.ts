@@ -178,7 +178,6 @@ export function registerBrowserBasicRoutes(app: BrowserRouteRegistrar, ctx: Brow
     const cdpUrl = toStringOrEmpty((req.body as { cdpUrl?: unknown })?.cdpUrl);
     const driver = toStringOrEmpty((req.body as { driver?: unknown })?.driver) as
       | "openclaw"
-      | "extension"
       | "existing-session"
       | "";
 
@@ -194,12 +193,7 @@ export function registerBrowserBasicRoutes(app: BrowserRouteRegistrar, ctx: Brow
           name,
           color: color || undefined,
           cdpUrl: cdpUrl || undefined,
-          driver:
-            driver === "extension"
-              ? "extension"
-              : driver === "existing-session"
-                ? "existing-session"
-                : undefined,
+          driver: driver === "existing-session" ? "existing-session" : undefined,
         }),
     });
   });
