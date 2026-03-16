@@ -19,6 +19,7 @@ import {
   warmupDedupFromDisk,
 } from "./dedup.js";
 import { isMentionForwardRequest } from "./mention.js";
+import { maybeHandleFeishuQuickActionMenu } from "./card-ux-launcher.js";
 import { fetchBotIdentityForMonitor } from "./monitor.startup.js";
 import { botNames, botOpenIds } from "./monitor.state.js";
 import { monitorWebhook, monitorWebSocket } from "./monitor.transport.js";
@@ -522,6 +523,16 @@ function registerEventHandlers(
         const operatorOpenId = event.operator?.operator_id?.open_id?.trim();
         const eventKey = event.event_key?.trim();
         if (!operatorOpenId || !eventKey) {
+          return;
+        }
+        const handledMenu = await maybeHandleFeishuQuickActionMenu({
+          cfg,
+          eventKey,
+          operatorOpenId,
+          runtime,
+          accountId,
+        });
+        if (handledMenu) {
           return;
         }
         const syntheticEvent: FeishuMessageEvent = {
