@@ -79,6 +79,7 @@ Docs: https://docs.openclaw.ai
 - Matrix/streaming: preserve ordered block flushes before tool, message, and agent boundaries, add explicit `channels.matrix.blockStreaming` opt-in so Matrix `streaming: "off"` stays final-only by default, and move MiniMax plain-text final handling into the MiniMax provider runtime instead of the shared core heuristic. (#59266) thanks @gumadeiras
 - Agents/compaction: resolve compaction wait before final reply/channel flush completion so slow end-of-run delivery drains no longer delay compaction completion. (#59308) thanks @gumadeiras
 - Exec approvals: align approval UX, effective-policy reporting, and `allow-always` availability with the host policy so CLI, doctor, and approval surfaces explain the real host-effective decision path. (#59283) Thanks @gumadeiras.
+- Telegram/native commands: clean up metadata-driven progress placeholders when replies fall back, edits fail, or local exec approval prompts are suppressed. (#59300) Thanks @jalehman.
 
 ## 2026.4.2
 
